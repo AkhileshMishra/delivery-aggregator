@@ -9,6 +9,11 @@ import { SessionStore } from "../../core/openclaw/sessionStore.js";
 import { ArtifactStore } from "../../core/openclaw/artifacts.js";
 import { partnerConfig } from "../../core/config/partners.js";
 import { logger } from "../../core/observability/logger.js";
+import type { PartnerId } from "../../core/partners/DeliveryPartner.js";
+
+/** Shared singletons — no need to recreate per request */
+const session = new SessionStore();
+const artifacts = new ArtifactStore();
 
 export function registerQuotesRoute(app: FastifyInstance) {
   app.post("/v1/quotes", async (request, reply) => {
@@ -23,11 +28,12 @@ export function registerQuotesRoute(app: FastifyInstance) {
     const cached = getCached(key);
     if (cached) return cached;
 
+    // Each request gets its own OpenClaw client — the orchestrator creates
+    // per-partner clients internally for context isolation.
     const ctx = {
-      openclaw: new OpenClawClient(),
-      session: new SessionStore(),
-      artifacts: new ArtifactStore(),
-      config: { partnerTimeoutMs: (id: string) => partnerConfig(id as any).timeoutMs },
+      session,
+      artifacts,
+      config: { partnerTimeoutMs: (id: PartnerId) => partnerConfig(id).timeoutMs },
       logger,
     };
 

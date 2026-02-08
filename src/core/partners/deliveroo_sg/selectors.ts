@@ -7,4 +7,5 @@ export const SELECTORS = {
   quoteSection: '[data-testid="quote-section"]',
   priceAmount: '[data-testid="delivery-fee"]',
   estimatedDropoff: '[data-testid="delivery-eta"]',
+  unavailableMsg: '[data-testid="no-delivery"], .unavailable-area, .no-service',
 } as const;

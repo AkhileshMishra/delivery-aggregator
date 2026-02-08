@@ -4,7 +4,8 @@ const PartnerResult = z.object({
   partner: z.string(),
   availability: z.boolean(),
   price: z.object({ amount: z.number().nonnegative(), currency: z.literal("SGD") }),
-  estimated_dropoff_time: z.string().datetime({ offset: true }),
+  /** ISO-8601 datetime when available, empty string when unavailable */
+  estimated_dropoff_time: z.string(),
   meta: z.record(z.unknown()).optional(),
 });
 

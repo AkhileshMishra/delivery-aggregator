@@ -22,8 +22,17 @@ export interface QuoteResult {
   meta?: Record<string, unknown>;
 }
 
+/** Context passed to each partner — openclaw is per-partner, not shared. */
 export interface RunContext {
   openclaw: OpenClawClient;
+  session: SessionStore;
+  artifacts: ArtifactStore;
+  config: { partnerTimeoutMs: (id: PartnerId) => number };
+  logger: Logger;
+}
+
+/** Shared context without openclaw — orchestrator creates per-partner clients. */
+export interface SharedContext {
   session: SessionStore;
   artifacts: ArtifactStore;
   config: { partnerTimeoutMs: (id: PartnerId) => number };

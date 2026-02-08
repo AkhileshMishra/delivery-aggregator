@@ -15,5 +15,17 @@ export function schemaGuard(partnerId: string, data: unknown): QuoteResult {
   if (!parsed.success) {
     throw new SchemaMismatchError(partnerId, parsed.error.message);
   }
-  return parsed.data as QuoteResult;
+  const result = parsed.data as QuoteResult;
+
+  // If available, price must be positive and dropoff time must be non-empty
+  if (result.availability) {
+    if (result.price.amount <= 0) {
+      throw new SchemaMismatchError(partnerId, "Available partner returned zero/negative price");
+    }
+    if (!result.estimated_dropoff_time) {
+      throw new SchemaMismatchError(partnerId, "Available partner returned empty dropoff time");
+    }
+  }
+
+  return result;
 }

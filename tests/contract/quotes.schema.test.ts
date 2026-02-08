@@ -72,4 +72,39 @@ describe("QuoteResponseSchema", () => {
     };
     expect(QuoteResponseSchema.safeParse(invalid).success).toBe(false);
   });
+
+  it("accepts unavailable partner with empty dropoff time", () => {
+    const valid = {
+      request_id: "6b7a1c92-8b0f-4bb0-9a7c-5c3a3c0f7f71",
+      request_time: "2026-02-08T13:49:00+08:00",
+      pickup_time_used: "2026-02-08T14:49:00+08:00",
+      currency: "SGD",
+      results: [
+        {
+          partner: "grabexpress",
+          availability: false,
+          price: { amount: 0, currency: "SGD" },
+          estimated_dropoff_time: "",
+          meta: { reason: "Service unavailable for this route" },
+        },
+      ],
+      errors: [],
+    };
+    expect(QuoteResponseSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("accepts all error types", () => {
+    const types = ["SelectorNotFound", "Timeout", "LoginExpired", "SchemaMismatch", "NavigationError", "CircuitOpen", "Unknown"];
+    for (const type of types) {
+      const resp = {
+        request_id: "6b7a1c92-8b0f-4bb0-9a7c-5c3a3c0f7f71",
+        request_time: "2026-02-08T13:49:00+08:00",
+        pickup_time_used: "2026-02-08T14:49:00+08:00",
+        currency: "SGD",
+        results: [],
+        errors: [{ partner: "test", type, message: "test", debug_packet_id: "dbg_test", retryable: true }],
+      };
+      expect(QuoteResponseSchema.safeParse(resp).success).toBe(true);
+    }
+  });
 });

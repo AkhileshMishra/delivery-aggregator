@@ -8,4 +8,5 @@ export const SELECTORS = {
   priceAmount: '[data-testid="rate-amount"]',
   estimatedDropoff: '[data-testid="delivery-date"]',
   courierName: '[data-testid="courier-name"]',
+  unavailableMsg: '[data-testid="no-courier"], .no-service, .area-unavailable',
 } as const;

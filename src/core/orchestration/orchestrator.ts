@@ -2,11 +2,14 @@ import { partnerQueue } from "./concurrency.js";
 import { partners } from "../partners/index.js";
 import { CircuitBreaker } from "../circuit/circuitBreaker.js";
 import { PartnerError } from "../openclaw/errors.js";
+import { OpenClawClient } from "../openclaw/client.js";
 import { schemaGuard } from "../validation/schemaGuard.js";
 import { toSGT } from "./time.js";
+import { normalizeDropoffTime } from "./time.js";
 import { partnerConfig } from "../config/partners.js";
+import { increment } from "../observability/metrics.js";
 import type { QuoteResponseDTO } from "../../api/schemas/quotes.response.js";
-import type { QuoteRequest, QuoteResult, RunContext, DeliveryPartner } from "../partners/DeliveryPartner.js";
+import type { QuoteRequest, QuoteResult, RunContext, SharedContext, DeliveryPartner } from "../partners/DeliveryPartner.js";
 
 const breakers = new Map(partners.map((p) => [p.id, new CircuitBreaker(
   partnerConfig(p.id).circuitThreshold,
@@ -17,15 +20,18 @@ type PartnerOutcome =
   | { ok: true; result: QuoteResult }
   | { ok: false; error: QuoteResponseDTO["errors"][number] };
 
+const MAX_RETRIES = 1; // one retry for transient errors
+
 async function runPartnerSafely(
   partner: DeliveryPartner,
-  ctx: RunContext,
+  shared: SharedContext,
   req: QuoteRequest,
 ): Promise<PartnerOutcome> {
   const breaker = breakers.get(partner.id)!;
 
   if (breaker.isOpen) {
-    const pktId = await ctx.artifacts.captureDebugPacket({
+    increment("partner_circuit_open", { partner: partner.id });
+    const pktId = await shared.artifacts.captureDebugPacket({
       requestId: req.requestId,
       partner: partner.id,
       errorType: "CircuitOpen",
@@ -34,43 +40,68 @@ async function runPartnerSafely(
     return { ok: false, error: { partner: partner.id, type: "CircuitOpen", message: "Circuit open", debug_packet_id: pktId, retryable: true } };
   }
 
-  try {
-    await partner.ensureAuthenticated(ctx);
+  let lastErr: PartnerError | null = null;
 
-    const result = await withTimeout(
-      () => partner.fetchQuote(ctx, req),
-      ctx.config.partnerTimeoutMs(partner.id),
-    );
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    // Each attempt gets its own isolated browser context
+    const client = new OpenClawClient();
+    const ctx: RunContext = { openclaw: client, ...shared };
 
-    schemaGuard(partner.id, result);
-    breaker.recordSuccess();
-    return { ok: true, result };
-  } catch (err) {
-    breaker.recordFailure();
-    const classified = err instanceof PartnerError
-      ? err
-      : new PartnerError(partner.id, "Unknown", String(err), false);
+    try {
+      await partner.ensureAuthenticated(ctx);
 
-    const pktId = await captureDebugSafe(ctx, req, partner.id, classified);
+      const result = await withTimeout(
+        () => partner.fetchQuote(ctx, req),
+        ctx.config.partnerTimeoutMs(partner.id),
+      );
 
-    ctx.logger.error({ requestId: req.requestId, partner: partner.id, errorType: classified.type, debugPacketId: pktId }, "partner_failed");
+      // Normalize dropoff time to ISO-8601 SGT
+      result.estimated_dropoff_time = normalizeDropoffTime(result.estimated_dropoff_time);
 
-    return {
-      ok: false,
-      error: {
-        partner: partner.id,
-        type: classified.type as QuoteResponseDTO["errors"][number]["type"],
-        message: classified.message,
-        debug_packet_id: pktId,
-        retryable: classified.retryable,
-      },
-    };
+      schemaGuard(partner.id, result);
+      breaker.recordSuccess();
+      increment("partner_success", { partner: partner.id });
+      return { ok: true, result };
+    } catch (err) {
+      const classified = err instanceof PartnerError
+        ? err
+        : new PartnerError(partner.id, "Unknown", String(err), false);
+      lastErr = classified;
+
+      // Only retry transient errors
+      if (!classified.retryable || attempt >= MAX_RETRIES) break;
+
+      shared.logger.warn({ partner: partner.id, attempt, errorType: classified.type }, "partner_retry");
+    } finally {
+      await client.close();
+    }
   }
+
+  // All attempts exhausted
+  breaker.recordFailure();
+  increment("partner_failure", { partner: lastErr!.partner, type: lastErr!.type });
+
+  const pktId = await captureDebugSafe(shared, req, partner.id, lastErr!);
+
+  shared.logger.error({ requestId: req.requestId, partner: partner.id, errorType: lastErr!.type, debugPacketId: pktId }, "partner_failed");
+
+  return {
+    ok: false,
+    error: {
+      partner: partner.id,
+      type: lastErr!.type as QuoteResponseDTO["errors"][number]["type"],
+      message: lastErr!.message,
+      debug_packet_id: pktId,
+      retryable: lastErr!.retryable,
+    },
+  };
 }
 
-export async function executeQuote(ctx: RunContext, req: QuoteRequest): Promise<QuoteResponseDTO> {
+export async function executeQuote(shared: SharedContext, req: QuoteRequest): Promise<QuoteResponseDTO> {
+  increment("quotes_requested");
+
   const outcomes = await Promise.allSettled(
-    partners.map((p) => partnerQueue.add(() => runPartnerSafely(p, ctx, req))),
+    partners.map((p) => partnerQueue.add(() => runPartnerSafely(p, shared, req))),
   );
 
   const results: QuoteResponseDTO["results"] = [];
@@ -100,24 +131,17 @@ function withTimeout<T>(fn: () => Promise<T>, ms: number): Promise<T> {
   });
 }
 
-async function captureDebugSafe(ctx: RunContext, req: QuoteRequest, partner: string, err: PartnerError): Promise<string> {
+async function captureDebugSafe(shared: SharedContext, req: QuoteRequest, partner: string, err: PartnerError): Promise<string> {
   try {
-    return await ctx.artifacts.captureDebugPacket({
+    return await shared.artifacts.captureDebugPacket({
       requestId: req.requestId,
       partner,
       failedAt: new Date().toISOString(),
       errorType: err.type,
       message: err.message,
       stack: err.stack,
-      domSnapshot: await safe(() => ctx.openclaw.dumpDom()),
-      screenshotPath: await safe(() => ctx.openclaw.screenshot()),
-      url: await safe(() => ctx.openclaw.currentUrl()),
     });
   } catch {
     return `dbg_capture_failed_${Date.now()}`;
   }
-}
-
-async function safe<T>(fn: () => Promise<T>): Promise<T | null> {
-  try { return await fn(); } catch { return null; }
 }

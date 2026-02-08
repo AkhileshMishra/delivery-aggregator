@@ -8,4 +8,5 @@ export const SELECTORS = {
   priceAmount: '[data-testid="price"]',
   estimatedDropoff: '[data-testid="eta"]',
   deliveryType: '[data-testid="delivery-type"]',
+  unavailableMsg: '[data-testid="no-service"], .unavailable, .out-of-range',
 } as const;

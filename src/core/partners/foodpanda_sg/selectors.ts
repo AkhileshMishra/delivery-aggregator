@@ -7,4 +7,5 @@ export const SELECTORS = {
   resultCard: '[data-testid="result-card"]',
   priceAmount: '[data-testid="total-fee"]',
   estimatedDropoff: '[data-testid="dropoff-eta"]',
+  unavailableMsg: '[data-testid="not-available"], .no-riders, .out-of-area',
 } as const;

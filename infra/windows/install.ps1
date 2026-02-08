@@ -42,18 +42,32 @@ New-Item -ItemType Directory -Force -Path $sessionPath | Out-Null
 icacls $sessionPath /inheritance:r /grant "NT AUTHORITY\SYSTEM:(OI)(CI)F" /grant "Administrators:(OI)(CI)F"
 Write-Host "Session storage locked down: $sessionPath"
 
-# 7. Generate encryption key if not set
+# 7. Generate encryption key AND API key if not set
 $envFile = "$repoDir\.env"
 if (-not (Test-Path $envFile)) {
-    $key = -join ((1..32) | ForEach-Object { "{0:x2}" -f (Get-Random -Maximum 256) })
+    $encKey = -join ((1..32) | ForEach-Object { "{0:x2}" -f (Get-Random -Maximum 256) })
+    $apiKey = -join ((1..32) | ForEach-Object { "{0:x2}" -f (Get-Random -Maximum 256) })
     @"
-SESSION_ENCRYPTION_KEY=$key
+SESSION_ENCRYPTION_KEY=$encKey
+API_KEY=$apiKey
 PORT=3000
 MAX_BROWSER_CONCURRENCY=6
 LOG_LEVEL=info
+REQUEST_TIMEOUT_MS=60000
+RATE_LIMIT_MAX=30
+RATE_LIMIT_WINDOW_MS=60000
 "@ | Out-File -FilePath $envFile -Encoding utf8
-    Write-Host "Generated .env with new encryption key"
+    Write-Host "Generated .env with new encryption key and API key"
     Write-Host "IMPORTANT: Back up SESSION_ENCRYPTION_KEY — losing it means re-authenticating all partners"
+    Write-Host "API_KEY: $apiKey (use this in x-api-key header)"
+} else {
+    # Ensure API_KEY exists in existing .env
+    $envContent = Get-Content $envFile -Raw
+    if ($envContent -notmatch "API_KEY=") {
+        $apiKey = -join ((1..32) | ForEach-Object { "{0:x2}" -f (Get-Random -Maximum 256) })
+        Add-Content -Path $envFile -Value "API_KEY=$apiKey"
+        Write-Host "Added API_KEY to existing .env: $apiKey"
+    }
 }
 
 # 8. Register Windows service via NSSM
@@ -83,9 +97,11 @@ Write-Host "=== Setup Complete ==="
 Write-Host "Service: $serviceName"
 Write-Host "API: http://localhost:3000/v1/quotes"
 Write-Host "Health: http://localhost:3000/v1/health"
+Write-Host "Metrics: http://localhost:3000/v1/metrics"
 Write-Host "Logs: $logDir"
 Write-Host ""
 Write-Host "Next steps:"
 Write-Host "  1. For each partner, run re-auth via API or manually place cookie files"
-Write-Host "  2. POST http://localhost:3000/v1/reauth/lalamove (opens visible browser)"
+Write-Host "  2. POST http://localhost:3000/v1/reauth/lalamove -H 'x-api-key: <your-key>'"
 Write-Host "  3. Monitor: GET http://localhost:3000/v1/health"
+Write-Host "  4. (Recommended) Install Caddy for HTTPS: winget install CaddyServer.Caddy"

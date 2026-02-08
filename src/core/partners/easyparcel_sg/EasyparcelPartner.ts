@@ -23,6 +23,17 @@ export class EasyparcelPartner extends DeliveryPartner {
     await ctx.openclaw.fill(SELECTORS.timeInput, req.pickupTimeISO);
     await ctx.openclaw.waitFor(SELECTORS.rateCard, { timeout: ctx.config.partnerTimeoutMs(this.id) });
 
+    const unavailable = await ctx.openclaw.exists(SELECTORS.unavailableMsg, { timeout: 1000 });
+    if (unavailable) {
+      return {
+        partner: this.id,
+        availability: false,
+        price: { amount: 0, currency: "SGD" },
+        estimated_dropoff_time: "",
+        meta: { reason: "Service unavailable for this route" },
+      };
+    }
+
     const amount = parseFloat(await ctx.openclaw.textContent(SELECTORS.priceAmount));
     const dropoff = await ctx.openclaw.textContent(SELECTORS.estimatedDropoff);
     const courier = await ctx.openclaw.textContent(SELECTORS.courierName);
