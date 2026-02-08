@@ -17,12 +17,14 @@ Write-Host "Node.js version: $(node --version)"
 if (-not (Get-Command nssm -ErrorAction SilentlyContinue)) {
     Write-Host "Installing NSSM..."
     winget install NSSM.NSSM --accept-package-agreements --accept-source-agreements
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
 
 # 3. Install Git (if not present)
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Host "Installing Git..."
     winget install Git.Git --accept-package-agreements --accept-source-agreements
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
 
 # 4. Install dependencies and build
@@ -47,21 +49,12 @@ $envFile = "$repoDir\.env"
 if (-not (Test-Path $envFile)) {
     $encKey = -join ((1..32) | ForEach-Object { "{0:x2}" -f (Get-Random -Maximum 256) })
     $apiKey = -join ((1..32) | ForEach-Object { "{0:x2}" -f (Get-Random -Maximum 256) })
-    @"
-SESSION_ENCRYPTION_KEY=$encKey
-API_KEY=$apiKey
-PORT=3000
-MAX_BROWSER_CONCURRENCY=6
-LOG_LEVEL=info
-REQUEST_TIMEOUT_MS=60000
-RATE_LIMIT_MAX=30
-RATE_LIMIT_WINDOW_MS=60000
-"@ | Out-File -FilePath $envFile -Encoding utf8
+    $envContent = "SESSION_ENCRYPTION_KEY=$encKey`nAPI_KEY=$apiKey`nPORT=3000`nMAX_BROWSER_CONCURRENCY=6`nLOG_LEVEL=info`nREQUEST_TIMEOUT_MS=60000`nRATE_LIMIT_MAX=30`nRATE_LIMIT_WINDOW_MS=60000"
+    [System.IO.File]::WriteAllText($envFile, $envContent)
     Write-Host "Generated .env with new encryption key and API key"
-    Write-Host "IMPORTANT: Back up SESSION_ENCRYPTION_KEY — losing it means re-authenticating all partners"
+    Write-Host "IMPORTANT: Back up SESSION_ENCRYPTION_KEY if you lose it you must re-authenticate all partners"
     Write-Host "API_KEY: $apiKey (use this in x-api-key header)"
 } else {
-    # Ensure API_KEY exists in existing .env
     $envContent = Get-Content $envFile -Raw
     if ($envContent -notmatch "API_KEY=") {
         $apiKey = -join ((1..32) | ForEach-Object { "{0:x2}" -f (Get-Random -Maximum 256) })
@@ -101,7 +94,6 @@ Write-Host "Metrics: http://localhost:3000/v1/metrics"
 Write-Host "Logs: $logDir"
 Write-Host ""
 Write-Host "Next steps:"
-Write-Host "  1. For each partner, run re-auth via API or manually place cookie files"
-Write-Host "  2. POST http://localhost:3000/v1/reauth/lalamove -H 'x-api-key: <your-key>'"
+Write-Host "  1. For each partner, run re-auth via API"
+Write-Host "  2. POST http://localhost:3000/v1/reauth/lalamove -H x-api-key:YOUR_KEY"
 Write-Host "  3. Monitor: GET http://localhost:3000/v1/health"
-Write-Host "  4. (Recommended) Install Caddy for HTTPS: winget install CaddyServer.Caddy"
