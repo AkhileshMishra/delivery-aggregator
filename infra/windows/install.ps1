@@ -71,9 +71,11 @@ if (-not (Test-Path $envFile)) {
 $serviceName = "DeliveryAggregator"
 $nodeExe = (Get-Command node).Source
 
-# Remove existing service if present
+# Remove existing service if present (errors are expected on first install)
+$ErrorActionPreference = "SilentlyContinue"
 nssm stop $serviceName 2>$null
 nssm remove $serviceName confirm 2>$null
+$ErrorActionPreference = "Stop"
 
 nssm install $serviceName $nodeExe
 nssm set $serviceName AppParameters "--env-file=$repoDir\.env $repoDir\dist\api\server.js"
