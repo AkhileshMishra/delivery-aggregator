@@ -1,0 +1,31 @@
+{
+  "name": "delivery-aggregator",
+  "version": "1.0.0",
+  "description": "Last-Mile Delivery Price Aggregator & Automation Engine",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/api/server.js",
+    "dev": "tsx watch src/api/server.ts",
+    "test": "vitest",
+    "test:contract": "vitest run tests/contract",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "fastify": "^5.2.0",
+    "zod": "^3.24.0",
+    "luxon": "^3.5.0",
+    "lru-cache": "^11.0.0",
+    "p-queue": "^8.1.0",
+    "pino": "^9.6.0",
+    "openclaw": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.4.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "eslint": "^9.0.0"
+  }
+}

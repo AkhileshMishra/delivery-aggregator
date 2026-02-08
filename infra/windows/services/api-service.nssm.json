@@ -1,0 +1,12 @@
+{
+  "service_name": "DeliveryAggregator",
+  "executable": "node",
+  "arguments": "dist/api/server.js",
+  "working_directory": "C:\\delivery-aggregator",
+  "stdout_log": "C:\\delivery-aggregator\\logs\\stdout.log",
+  "stderr_log": "C:\\delivery-aggregator\\logs\\stderr.log",
+  "rotate_files": true,
+  "rotate_bytes": 10485760,
+  "restart_delay_ms": 5000,
+  "start_type": "SERVICE_AUTO_START"
+}
