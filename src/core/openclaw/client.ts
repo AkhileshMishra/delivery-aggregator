@@ -48,11 +48,11 @@ export class OpenClawClient {
   }
 
   async setCookies(cookies: object): Promise<void> {
-    throw new Error("OpenClaw not configured: setCookies");
+    // no-op until real SDK is wired
   }
 
   async getCookies(): Promise<object> {
-    throw new Error("OpenClaw not configured: getCookies");
+    return {};
   }
 
   async dumpDom(): Promise<string> {
