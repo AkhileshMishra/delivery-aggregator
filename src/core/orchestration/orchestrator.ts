@@ -41,6 +41,7 @@ async function runPartnerSafely(
   }
 
   let lastErr: PartnerError | null = null;
+  let lastDebugPktId: string | null = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     // Each attempt gets its own isolated browser context
@@ -68,6 +69,9 @@ async function runPartnerSafely(
         : new PartnerError(partner.id, "Unknown", String(err), false);
       lastErr = classified;
 
+      // Capture debug packet BEFORE closing the browser so DOM/screenshot are available
+      lastDebugPktId = await captureDebugSafe(ctx, shared, req, partner.id, classified);
+
       // Only retry transient errors
       if (!classified.retryable || attempt >= MAX_RETRIES) break;
 
@@ -81,9 +85,7 @@ async function runPartnerSafely(
   breaker.recordFailure();
   increment("partner_failure", { partner: lastErr!.partner, type: lastErr!.type });
 
-  const pktId = await captureDebugSafe(shared, req, partner.id, lastErr!);
-
-  shared.logger.error({ requestId: req.requestId, partner: partner.id, errorType: lastErr!.type, debugPacketId: pktId }, "partner_failed");
+  shared.logger.error({ requestId: req.requestId, partner: partner.id, errorType: lastErr!.type, debugPacketId: lastDebugPktId }, "partner_failed");
 
   return {
     ok: false,
@@ -91,7 +93,7 @@ async function runPartnerSafely(
       partner: partner.id,
       type: lastErr!.type as QuoteResponseDTO["errors"][number]["type"],
       message: lastErr!.message,
-      debug_packet_id: pktId,
+      debug_packet_id: lastDebugPktId ?? `dbg_no_capture_${Date.now()}`,
       retryable: lastErr!.retryable,
     },
   };
@@ -131,7 +133,7 @@ function withTimeout<T>(fn: () => Promise<T>, ms: number): Promise<T> {
   });
 }
 
-async function captureDebugSafe(shared: SharedContext, req: QuoteRequest, partner: string, err: PartnerError): Promise<string> {
+async function captureDebugSafe(ctx: RunContext, shared: SharedContext, req: QuoteRequest, partner: string, err: PartnerError): Promise<string> {
   try {
     return await shared.artifacts.captureDebugPacket({
       requestId: req.requestId,
@@ -140,8 +142,17 @@ async function captureDebugSafe(shared: SharedContext, req: QuoteRequest, partne
       errorType: err.type,
       message: err.message,
       stack: err.stack,
+      // Best-effort: browser is still open here, so DOM/screenshot/URL are available.
+      // safe() ensures a failure to capture any of these does not hide the root error.
+      domSnapshot: await safe(() => ctx.openclaw.dumpDom()),
+      screenshotPath: await safe(() => ctx.openclaw.screenshot()),
+      url: await safe(() => ctx.openclaw.currentUrl()),
     });
   } catch {
     return `dbg_capture_failed_${Date.now()}`;
   }
+}
+
+async function safe<T>(fn: () => Promise<T>): Promise<T | null> {
+  try { return await fn(); } catch { return null; }
 }
