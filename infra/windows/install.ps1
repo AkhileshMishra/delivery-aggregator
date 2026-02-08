@@ -31,6 +31,10 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 Set-Location $repoDir
 Write-Host "Installing npm dependencies..."
 npm ci
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "npm ci failed, falling back to npm install..."
+    npm install
+}
 Write-Host "Building TypeScript..."
 npm run build
 

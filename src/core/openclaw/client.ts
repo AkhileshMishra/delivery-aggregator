@@ -1,98 +1,73 @@
 /**
  * OpenClaw browser automation client.
- * Wraps the openclaw SDK to provide browser context lifecycle,
- * cookie management, and page interaction primitives.
+ *
+ * This is a stub implementation. When the openclaw SDK is published to npm,
+ * install it (`npm i openclaw`) and replace the stub methods below with
+ * real SDK calls. The interface is stable — partners depend only on the
+ * public methods of this class.
  */
-import { Claw } from "openclaw";
 
 export interface OpenClawOptions {
   headless?: boolean;
 }
 
 export class OpenClawClient {
-  private claw: Claw | null = null;
   private readonly opts: OpenClawOptions;
 
   constructor(opts: OpenClawOptions = { headless: true }) {
     this.opts = opts;
   }
 
-  private async ensureClaw(): Promise<Claw> {
-    if (!this.claw) {
-      this.claw = await Claw.create({ headless: this.opts.headless ?? true });
-    }
-    return this.claw;
-  }
-
   async goto(url: string): Promise<void> {
-    const c = await this.ensureClaw();
-    await c.browse(url);
+    // TODO: await claw.browse(url)
+    throw new Error(`OpenClaw not configured: goto ${url}`);
   }
 
   async fill(selector: string, value: string): Promise<void> {
-    const c = await this.ensureClaw();
-    await c.fill(selector, value);
+    throw new Error(`OpenClaw not configured: fill ${selector}`);
   }
 
   async click(selector: string): Promise<void> {
-    const c = await this.ensureClaw();
-    await c.click(selector);
+    throw new Error(`OpenClaw not configured: click ${selector}`);
   }
 
   async waitFor(selector: string, opts?: { timeout?: number }): Promise<void> {
-    const c = await this.ensureClaw();
-    await c.waitForSelector(selector, { timeout: opts?.timeout ?? 30_000 });
+    throw new Error(`OpenClaw not configured: waitFor ${selector}`);
   }
 
   async waitForNavigation(opts?: { url?: string; timeout?: number }): Promise<void> {
-    const c = await this.ensureClaw();
-    await c.waitForNavigation({ url: opts?.url, timeout: opts?.timeout ?? 30_000 });
+    throw new Error("OpenClaw not configured: waitForNavigation");
   }
 
   async exists(selector: string, opts?: { timeout?: number }): Promise<boolean> {
-    const c = await this.ensureClaw();
-    try {
-      await c.waitForSelector(selector, { timeout: opts?.timeout ?? 5000 });
-      return true;
-    } catch {
-      return false;
-    }
+    return false;
   }
 
   async textContent(selector: string): Promise<string> {
-    const c = await this.ensureClaw();
-    return await c.textContent(selector) ?? "";
+    throw new Error(`OpenClaw not configured: textContent ${selector}`);
   }
 
   async setCookies(cookies: object): Promise<void> {
-    const c = await this.ensureClaw();
-    await c.setCookies(cookies as any[]);
+    throw new Error("OpenClaw not configured: setCookies");
   }
 
   async getCookies(): Promise<object> {
-    const c = await this.ensureClaw();
-    return await c.getCookies();
+    throw new Error("OpenClaw not configured: getCookies");
   }
 
   async dumpDom(): Promise<string> {
-    const c = await this.ensureClaw();
-    return await c.content();
+    return "";
   }
 
   async screenshot(): Promise<string> {
-    const c = await this.ensureClaw();
-    return await c.screenshot();
+    return "";
   }
 
   async currentUrl(): Promise<string> {
-    const c = await this.ensureClaw();
-    return c.url();
+    return "";
   }
 
   async close(): Promise<void> {
-    if (this.claw) {
-      await this.claw.close().catch(() => {});
-      this.claw = null;
-    }
+    // no-op until real SDK is wired
   }
 }
